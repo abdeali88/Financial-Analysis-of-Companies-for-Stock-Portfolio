@@ -43,32 +43,32 @@ The analysis indicates that companies with lower Per Asset Accruals (Long Portfo
 ### Visualizations
 
 #### Descriptive Statistics
-![Descriptive Statistics](images/descriptive_statistics_screenshot.png)
+![Descriptive Statistics](/descriptive_statistics_screenshot.png)
 
 #### Long Portfolio Statistics
-![Long Portfolio Statistics](images/long_portfolio_statistics_screenshot.png)
+![Long Portfolio Statistics](/long_portfolio_statistics_screenshot.png)
 
 #### Short Portfolio Statistics
-![Short Portfolio Statistics](images/short_portfolio_statistics_screenshot.png)
+![Short Portfolio Statistics](/short_portfolio_statistics_screenshot.png)
 
 ### Companies in Long and Short Portfolios
 
 #### Long Portfolio
-![Long Portfolio](images/long_portfolio_screenshot.png)
+![Long Portfolio](/long_portfolio_screenshot.png)
 
 #### Short Portfolio
-![Short Portfolio](images/short_portfolio_screenshot.png)
+![Short Portfolio](/short_portfolio_screenshot.png)
 
 ### Graphs
 
 #### Histogram of Per Asset Accruals for Long and Short Portfolios
-![Histogram](images/histogram_screenshot.png)
+![Histogram](/histogram_screenshot.png)
 
 #### Boxplot of Size-Adjusted Cumulative Abnormal Returns for Long and Short Portfolios
-![Boxplot](images/boxplot_screenshot.png)
+![Boxplot](/boxplot_screenshot.png)
 
 #### Scatter Plot of Per Asset Accrual vs. Size-Adjusted Cumulative Abnormal Returns
-![Scatter Plot](images/scatter_plot_screenshot.png)
+![Scatter Plot](/scatter_plot_screenshot.png)
 
 
 ### Additional Project Description
