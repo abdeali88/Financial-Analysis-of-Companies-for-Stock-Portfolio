@@ -1,0 +1,377 @@
+---
+title: "Portfolio of Companies"
+author: "Abdeali Arsiwala"
+date: "2024-05-17"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+install.packages("readxl")
+install.packages("ggplot2")
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+```{r}
+file_path <- "Earnings Quality Signals Analytics Project Data.xlsx"
+financial_data <- read_excel(file_path, sheet = "Financial Statement Data")
+head(financial_data)
+```
+
+# Filter the data to create dataframes of companies that have both 2020 and 2021 data and remove duplicates
+```{r}
+# Filter financial data for 2020 and 2021
+financial_data_2020 <- financial_data %>% filter(`Fiscal Year` == 2020)
+financial_data_2021 <- financial_data %>% filter(`Fiscal Year` == 2021)
+
+# Identify companies with financial data for both 2020 and 2021
+common_permnos <- intersect(financial_data_2020$PERMNO, financial_data_2021$PERMNO)
+
+# Filter the financial data for these companies
+financial_data_2020 <- financial_data_2020 %>% filter(PERMNO %in% common_permnos)
+financial_data_2021 <- financial_data_2021 %>% filter(PERMNO %in% common_permnos)
+
+# Remove duplicates by keeping the first occurrence
+financial_data_2020 <- financial_data_2020 %>% 
+  distinct(PERMNO, .keep_all = TRUE)
+
+financial_data_2021 <- financial_data_2021 %>% 
+  distinct(PERMNO, .keep_all = TRUE)
+
+# Verify dimensions
+dim(financial_data_2020)
+dim(financial_data_2021)
+```
+
+# Merge and Clean Dataframe
+
+```{r}
+# Merge the 2020 and 2021 financial data
+financial_data_merged <- merge(financial_data_2021, financial_data_2020, by = c("GVKEY", "PERMNO", "Company Name", "Ticker"), suffixes = c("_2021", "_2020"))
+
+financial_data_merged <- financial_data_merged %>%
+  select(-`Fiscal Year_2020`, -`Fiscal Year_2021`)
+
+cols_to_convert <- setdiff(names(financial_data_merged), c("Company Name", "Ticker"))
+
+financial_data_merged[cols_to_convert] <- lapply(financial_data_merged[cols_to_convert], as.numeric)
+
+# Check the head of the merged dataframe
+head(financial_data_merged)
+
+```
+
+# STEP 1 -> Calculate the Accrual Component for 2021
+```{r}
+
+# Calculate changes (deltas) for required components
+financial_data_merged <- financial_data_merged %>%
+  mutate(
+    delta_CA = `Current Assets_2021` - `Current Assets_2020`,
+    delta_Cash = `Cash_2021` - `Cash_2020`,
+    delta_CL = `Current Liabilities_2021` - `Current Liabilities_2020`,
+    delta_STD = `Debt in Current Liabilities_2021` - `Debt in Current Liabilities_2020`,
+    delta_TP = `Income Taxes Payable_2021` - `Income Taxes Payable_2020`,
+    Avg_Total_Assets = (`Total Assets_2020` + `Total Assets_2021`) / 2
+
+  )
+
+# Calculate the Accrual Component 
+financial_data_merged <- financial_data_merged %>%
+  mutate(
+    Accrual_Component_2021 = (delta_CA - delta_Cash) - (delta_CL - delta_STD - delta_TP) - `Depreciation and Amortization_2021`
+  )
+
+# Calculate the Cash Component
+financial_data_merged <- financial_data_merged %>%
+  mutate(
+    Cash_Component_2021 = `Operating Income After Depreciation_2021` - Accrual_Component_2021  + `Depreciation and Amortization_2021`
+  )
+
+dim(financial_data_merged)
+
+# Drop rows with NA values in the Accrual_Component column
+financial_data_merged <- financial_data_merged %>%
+  filter(!is.na(Accrual_Component_2021) & !is.na(Cash_Component_2021) & !is.na(Avg_Total_Assets))
+
+dim(financial_data_merged)
+
+```
+
+# STEP 2 -> Standardize the Accrual Component
+```{r}
+
+# Standardize the Accrual Component
+financial_data_merged <- financial_data_merged %>%
+  mutate(
+    Per_Asset_Accrual_2021 = Accrual_Component_2021 / Avg_Total_Assets,
+    Per_Asset_Cash_2021 = Cash_Component_2021 / Avg_Total_Assets,
+    Per_Asset_Operating_2021 = `Operating Income After Depreciation_2021` / Avg_Total_Assets
+  )
+
+financial_data_merged <- financial_data_merged[,c(1:4, 57:59)]
+  
+dim(financial_data_merged)
+head(financial_data_merged)
+```
+
+
+# Calculate Size-Adjusted Cumulative Abnormal Returns
+
+```{r}
+company_stock_returns <- read_excel(file_path, sheet = "Company Stock Returns", col_names = TRUE)
+size_matched_returns <- read_excel(file_path, sheet = "Size-matched Stock Returns", col_names = TRUE)
+
+# Specify column names
+column_names <- c("PERMNO", "Company Name", "Ticker", 
+                      "Jan_2020", "Feb_2020", "Mar_2020", "Apr_2020", 
+                      "May_2020", "Jun_2020", "Jul_2020", "Aug_2020", 
+                      "Sep_2020", "Oct_2020", "Nov_2020", "Dec_2020", 
+                      "Jan_2021", "Feb_2021", "Mar_2021", "Apr_2021", 
+                      "May_2021", "Jun_2021", "Jul_2021", "Aug_2021", 
+                      "Sep_2021", "Oct_2021", "Nov_2021", "Dec_2021", 
+                      "Jan_2022", "Feb_2022", "Mar_2022", "Apr_2022", 
+                      "May_2022", "Jun_2022", "Jul_2022", "Aug_2022", 
+                      "Sep_2022", "Oct_2022", "Nov_2022", "Dec_2022", 
+                      "Jan_2023", "Feb_2023", "Mar_2023", "Apr_2023", 
+                      "May_2023", "Jun_2023", "Jul_2023", "Aug_2023", 
+                      "Sep_2023", "Oct_2023", "Nov_2023", "Dec_2023")
+
+# Set column names
+colnames(company_stock_returns) <- column_names
+colnames(size_matched_returns) <- column_names
+
+head(company_stock_returns)
+```
+
+```{r}
+# Select the necessary columns for calculation
+required_columns <- c("PERMNO", "Company Name", "Ticker", 
+                      "May_2022", "Jun_2022", "Jul_2022", "Aug_2022", 
+                      "Sep_2022", "Oct_2022", "Nov_2022", "Dec_2022", 
+                      "Jan_2023", "Feb_2023", "Mar_2023", "Apr_2023")
+
+company_stock_returns <- company_stock_returns[, required_columns]
+size_matched_returns <- size_matched_returns[, required_columns]
+
+
+# Merge the two datasets
+merged_returns <- merge(company_stock_returns, size_matched_returns, by = c("PERMNO", "Company Name", "Ticker"), suffixes = c("_Individual", "_Size_Matched"))
+
+dim(merged_returns)
+
+# Remove duplicates by keeping the first occurrence
+merged_returns <- merged_returns %>% 
+  distinct(PERMNO, .keep_all = TRUE)
+
+dim(merged_returns)
+
+# Convert columns to numeric
+cols_to_convert <- setdiff(names(merged_returns), c("Company Name", "Ticker"))
+merged_returns[cols_to_convert] <- lapply(merged_returns[cols_to_convert], as.numeric)
+
+# Drop NA values except for "Company Name" and "Ticker"
+merged_returns <- merged_returns %>%
+  drop_na(-`Company Name`, -`Ticker`)
+
+# Display the result
+dim(merged_returns)
+head(merged_returns)
+```
+
+```{r}
+# Define a function to calculate cumulative returns
+calculate_cumulative_returns <- function(df, start_col, end_col) {
+  # Convert column names to numeric
+  start_col_index <- match(start_col, colnames(df))
+  end_col_index <- match(end_col, colnames(df))
+  
+  # Calculate cumulative returns
+  returns <- apply(df[, start_col_index:end_col_index], 1, function(row) prod(1 + row))
+  returns
+}
+
+# Calculate Cumulative_Return_Individual
+merged_returns$Cumulative_Return_Individual <- calculate_cumulative_returns(
+  merged_returns, "May_2022_Individual", "Apr_2023_Individual"
+)
+
+# Calculate Cumulative_Return_Size_Matched
+merged_returns$Cumulative_Return_Size_Matched <- calculate_cumulative_returns(
+  merged_returns, "May_2022_Size_Matched", "Apr_2023_Size_Matched"
+)
+
+# Calculate Size_Adjusted_Abnormal_Returns
+merged_returns$Size_Adjusted_Abnormal_Returns <- merged_returns$Cumulative_Return_Individual - merged_returns$Cumulative_Return_Size_Matched
+
+merged_returns <- merged_returns[, c("PERMNO", "Company Name", "Ticker", "Cumulative_Return_Individual", "Cumulative_Return_Size_Matched", "Size_Adjusted_Abnormal_Returns")]
+
+# Display the result
+head(merged_returns)
+```
+
+```{r}
+merged_final <- merge(financial_data_merged, merged_returns, by = c("PERMNO", "Company Name", "Ticker"))
+dim(merged_final)
+head(merged_final)
+```
+
+# Forming the Long/Short Portfolio
+
+```{r}
+# Sort the merged_final dataframe based on Per Asset Accruals
+portfolio <- merged_final[order(merged_final$Per_Asset_Accrual), ]
+
+# Select the top 25 companies with the lowest Per Asset Accruals (L group)
+L_group <- portfolio[1:25, ]
+
+# Select the top 25 companies with the highest Per Asset Accruals (H group)
+H_group <- portfolio[(nrow(portfolio) - 24):nrow(portfolio), ]
+
+# Calculate average Per Asset Accrual for L and H groups
+avg_accrual_L <- mean(L_group$Per_Asset_Accrual)
+avg_accrual_H <- mean(H_group$Per_Asset_Accrual)
+
+# Calculate average Size-Adjusted Cumulative Abnormal Returns for L and H groups
+avg_returns_L <- mean(L_group$Size_Adjusted_Abnormal_Returns)
+avg_returns_H <- mean(H_group$Size_Adjusted_Abnormal_Returns)
+
+# Compute Hedge Return
+hedge_return <- avg_returns_L - avg_returns_H
+
+# Print results
+cat("Average Per Asset Accrual for L group:", avg_accrual_L, "\n")
+cat("Average Per Asset Accrual for H group:", avg_accrual_H, "\n")
+cat("Average Size-Adjusted Cumulative Abnormal Returns for L group:", avg_returns_L, "\n")
+cat("Average Size-Adjusted Cumulative Abnormal Returns for H group:", avg_returns_H, "\n")
+cat("Hedge Return:", hedge_return, "\n")
+```
+
+
+# Descriptive Statistics
+
+```{r}
+summary(merged_final[,c("Per_Asset_Accrual_2021","Per_Asset_Cash_2021","Per_Asset_Operating_2021")])
+```
+
+# Satitistics of Lower Group Portfolio
+
+```{r}
+cat("STATISTICS FOR THE LOWER GROUP: \n\n")
+summary(L_group[,c("Per_Asset_Accrual_2021","Per_Asset_Cash_2021","Per_Asset_Operating_2021", "Size_Adjusted_Abnormal_Returns")])
+```
+# Satitistics of Higher Group Portfolio
+
+```{r}
+cat("STATISTICS FOR THE HIGHER GROUP: \n\n")
+summary(H_group[,c("Per_Asset_Accrual_2021","Per_Asset_Cash_2021","Per_Asset_Operating_2021", "Size_Adjusted_Abnormal_Returns")])
+```
+
+# Visualizations
+
+```{r}
+# Add a column to indicate portfolio group
+merged_final <- merged_final %>%
+  mutate(Portfolio = ifelse(Per_Asset_Accrual_2021 < median(Per_Asset_Accrual_2021), "Long Portfolio", "Short Portfolio"))
+
+# Histogram of Per Asset Accruals for Long and Short portfolios
+ggplot(merged_final, aes(x = Per_Asset_Accrual_2021, fill = Portfolio)) +
+  geom_histogram(binwidth = 0.05, alpha = 0.7, position = "identity") +
+  scale_fill_manual(values = c("Long Portfolio" = "#1f77b4", "Short Portfolio" = "#ff7f0e")) +
+  facet_wrap(~ Portfolio) +
+  labs(title = "Histogram of Per Asset Accruals for Long and Short Portfolios", x = "Per Asset Accrual", y = "Frequency") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Boxplot of Size-Adjusted Cumulative Abnormal Returns for Long and Short portfolios
+ggplot(merged_final, aes(x = Portfolio, y = Size_Adjusted_Abnormal_Returns, fill = Portfolio)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("Long Portfolio" = "#1f77b4", "Short Portfolio" = "#ff7f0e")) +
+  labs(title = "Boxplot of Size-Adjusted Cumulative Abnormal Returns", x = "Portfolio", y = "Size-Adjusted Cumulative Abnormal Returns") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+# Scatter plot of Per Asset Accrual vs. Size-Adjusted Cumulative Abnormal Returns for companies in both portfolios
+ggplot(merged_final, aes(x = Per_Asset_Accrual_2021, y = Size_Adjusted_Abnormal_Returns, color = Portfolio, label = `Company Name`)) +
+  geom_point(alpha = 0.7, size = 3) +
+  geom_text(aes(label=ifelse(Portfolio == "Long Portfolio" & Size_Adjusted_Abnormal_Returns > 1, as.character(`Company Name`),'')), hjust=0, vjust=0, check_overlap = TRUE) +
+  scale_color_manual(values = c("Long Portfolio" = "#1f77b4", "Short Portfolio" = "#ff7f0e")) +
+  labs(title = "Companies in Both Portfolios", x = "Per Asset Accrual", y = "Size-Adjusted Cumulative Abnormal Returns") +
+  theme_minimal()
+
+
+```
+```{r}
+library(kableExtra)
+
+# Create a table for the Long Portfolio
+long_portfolio_table <- L_group %>%
+  select(`Company Name`, `Ticker`, Per_Asset_Accrual_2021, `Size_Adjusted_Abnormal_Returns`) %>%
+  arrange(Per_Asset_Accrual_2021)
+
+kable(long_portfolio_table, format = "markdown", caption = "Long Portfolio: Companies with Lowest Per Asset Accrual") %>%
+  kable_styling(latex_options = c("striped", "hold_position"), full_width = F)
+
+```
+
+
+```{r}
+# Create a table for the Short Portfolio
+short_portfolio_table <- H_group %>%
+  select(`Company Name`, `Ticker`, Per_Asset_Accrual_2021, `Size_Adjusted_Abnormal_Returns`) %>%
+  arrange(desc(Per_Asset_Accrual_2021))
+
+kable(short_portfolio_table, format = "markdown", caption = "Short Portfolio: Companies with Highest Per Asset Accrual") %>%
+  kable_styling(latex_options = c("striped", "hold_position"), full_width = F)
+```
+
+## Conclusion
+
+The analysis aimed to investigate the earnings quality signal by calculating the accrual component of operating income and constructing a long/short portfolio based on this metric. The descriptive statistics provided insights into the financial characteristics and performance of the sampled firms, while the performance of the portfolios gave a clearer picture of the strategy's effectiveness.
+
+### Key Findings:
+
+1. **Per Asset Accrual and Portfolio Formation:**
+   - **Long Portfolio (L group):** Consisted of firms with the lowest Per Asset Accrual, averaging -0.5511. The average Size-Adjusted Cumulative Abnormal Return was -0.0326.
+   - **Short Portfolio (H group):** Comprised of firms with the highest Per Asset Accrual, averaging 0.7991. The average Size-Adjusted Cumulative Abnormal Return was -0.1634.
+   - **Hedge Return:** Calculated as the difference between the average Size-Adjusted Cumulative Abnormal Returns of the L and H groups, yielding a positive hedge return of 0.1307.
+
+2. **Descriptive Statistics:**
+   - The sample included a wide range of Per Asset Accrual values, from -0.8163 to 1.1947, with a mean of -0.0021.
+   - Operating Income and Cash Flow metrics also exhibited significant variability, indicating diverse financial performance across firms.
+
+### Portfolio Companies:
+
+- **Long Portfolio (L group):** Includes companies like Spectrum Pharmaceuticals Inc (SPPI), Siyata Mobile Inc (SYTA), and Agile Therapeutics Inc (AGRX).
+- **Short Portfolio (H group):** Includes companies like Celsius Holdings Inc (CELH), Immersion Corp (IMMR), and Foghorn Therapeutics Inc (FHTX).
+
+### Interpretation:
+- **Performance of Long Portfolio (L group):** The firms with the lowest accruals, while expected to perform better due to high earnings quality, yielded an average negative Size-Adjusted Cumulative Abnormal Return of -0.0326.
+- **Performance of Short Portfolio (H group):** Firms with the highest accruals, typically seen as having lower earnings quality, also had negative returns but significantly lower at -0.1634.
+- **Hedge Return:** A positive hedge return of 0.1307 indicates that a strategy of going long on the L group and short on the H group could yield positive returns despite both groups having negative average returns individually.
+
+### Insights:
+- The positive hedge return supports the hypothesis that firms with lower accruals (L group) tend to outperform those with higher accruals (H group) in terms of risk-adjusted returns.
+- The analysis confirms the potential utility of accrual-based metrics in constructing effective long/short equity strategies.
+- Further investigation could enhance the robustness of the strategy by incorporating additional financial metrics and testing over different time periods or market conditions.
+
+### Limitations and Future Research:
+- The presence of outliers and extreme values in both groups highlights the need for robust statistical methods to handle such anomalies.
+- Missing values and data quality issues should be addressed to improve the accuracy of the analysis.
+- Expanding the dataset and incorporating more firms across different sectors could provide more generalized insights.
+- Further research could involve exploring other financial indicators or a multi-factor model to enhance the predictive power of the investment strategy.
+
+Overall, this project demonstrates the application of financial analytics in constructing investment strategies and provides valuable insights into the relationship between accruals and stock performance.
+
