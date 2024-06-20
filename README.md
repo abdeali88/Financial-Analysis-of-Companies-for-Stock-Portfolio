@@ -83,22 +83,4 @@ The project is based on the earnings quality signal developed by Richard Sloan, 
 #### Preface
 The project follows the methodology of Barclays Global Investors (BGI) in creating long/short stock portfolios designed to generate excess or abnormal (alpha) returns using signals like the earnings quality signal.
 
-### Methodology Steps
-1. **Calculation of the Accrual Component of Operating Income:**
-   - Operating Income minus Depreciation = Cash flow component of Operating Income + Accrual component of Operating Income – Depreciation.
-   - Accrual Component for 2021 = (ΔCA – ΔCash) – (ΔCL – ΔSTD – ΔTP) - Dep.
-
-2. **Standardization of the Accrual Component:**
-   - The Accrual Component is standardized by dividing it by the Average Total Assets (average of the beginning and end of year book value of total assets).
-
-3. **Calculation of the Size-Adjusted Cumulative Abnormal Returns:**
-   - Stock returns are measured starting four months after the fiscal year end.
-   - Size-Adjusted Cumulative Abnormal Returns are calculated for the period from May 2022 to April 2023.
-
-4. **Forming the Long/Short Portfolio:**
-   - Companies are sorted based on Per Asset Accruals.
-   - The Long Portfolio includes the 25 companies with the lowest Per Asset Accruals.
-   - The Short Portfolio includes the 25 companies with the highest Per Asset Accruals.
-   - The Hedge Return is computed as the difference between the average Size-Adjusted Cumulative Abnormal Returns of the Long and Short portfolios.
-
 This project provides valuable insights into the relationship between accrual components and stock performance, aiding in investment decisions based on earnings quality signals.
